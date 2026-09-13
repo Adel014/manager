@@ -2,11 +2,11 @@
 <html lang="en">
 
 <head>
-
+<link rel="icon" type="image/svg+xml" href="lurelle-butterfly.svg">
 <meta charset="UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" type="image/svg+xml" href="lurelle-butterfly.svg">
+
 <title>Lurelle | Custom Order Manager</title>
 
 
@@ -699,6 +699,19 @@ const SUPABASE_PUBLISHABLE_KEY =
 
 
 /* =========================
+   GET MANAGER ACCESS TOKEN
+========================= */
+
+function getAccessToken() {
+
+    return localStorage.getItem(
+        "lurelle_access_token"
+    );
+
+}
+
+
+/* =========================
    LOAD ORDERS
 ========================= */
 
@@ -735,6 +748,25 @@ async function loadOrders() {
         "";
 
 
+    const accessToken =
+        getAccessToken();
+
+
+    if (!accessToken) {
+
+        status.textContent =
+            "Please log in through the Lurelle Manager Login first. ♡";
+
+
+        count.textContent =
+            "";
+
+
+        return;
+
+    }
+
+
     try {
 
 
@@ -757,6 +789,10 @@ async function loadOrders() {
 
                         "apikey":
                             SUPABASE_PUBLISHABLE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            accessToken,
 
                         "Content-Type":
                             "application/json"
@@ -781,8 +817,22 @@ async function loadOrders() {
             );
 
 
-            status.textContent =
-                "We couldn't load the custom orders. ♡";
+            if (
+                response.status === 401 ||
+                response.status === 403
+            ) {
+
+                status.textContent =
+                    "Your manager login has expired. Please log in again. ♡";
+
+            }
+
+            else {
+
+                status.textContent =
+                    "We couldn't load the custom orders. ♡";
+
+            }
 
 
             count.textContent =
@@ -1450,6 +1500,21 @@ async function updateOrderStatus(
 ) {
 
 
+    const accessToken =
+        getAccessToken();
+
+
+    if (!accessToken) {
+
+        alert(
+            "Your manager login has expired. Please log in again. ♡"
+        );
+
+        return;
+
+    }
+
+
     try {
 
 
@@ -1477,6 +1542,10 @@ async function updateOrderStatus(
 
                         "apikey":
                             SUPABASE_PUBLISHABLE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            accessToken,
 
                         "Prefer":
                             "return=minimal"
@@ -1566,6 +1635,21 @@ async function deleteOrder(
     }
 
 
+    const accessToken =
+        getAccessToken();
+
+
+    if (!accessToken) {
+
+        alert(
+            "Your manager login has expired. Please log in again. ♡"
+        );
+
+        return;
+
+    }
+
+
     try {
 
 
@@ -1591,8 +1675,21 @@ async function deleteOrder(
                         "apikey":
                             SUPABASE_PUBLISHABLE_KEY,
 
+                        "Authorization":
+                            "Bearer " +
+                            accessToken,
+
                         "Content-Type":
-                            "application/json"
+                            "application/json",
+
+                        /*
+                        IMPORTANT:
+                        Ask Supabase to return the
+                        row that was actually deleted.
+                        */
+
+                        "Prefer":
+                            "return=representation"
 
                     }
 
@@ -1601,17 +1698,95 @@ async function deleteOrder(
             );
 
 
+        const responseText =
+            await response.text();
+
+
+        let deletedRows = [];
+
+
+        if (responseText) {
+
+            try {
+
+                deletedRows =
+                    JSON.parse(
+                        responseText
+                    );
+
+            }
+
+            catch (parseError) {
+
+                console.error(
+                    "DELETE RESPONSE:",
+                    responseText
+                );
+
+            }
+
+        }
+
+
         if (!response.ok) {
 
 
             console.error(
                 "DELETE ERROR:",
-                await response.text()
+                deletedRows
+            );
+
+
+            if (
+                response.status === 401 ||
+                response.status === 403
+            ) {
+
+                alert(
+                    "You don't have permission to delete this order. Please log in again. ♡"
+                );
+
+            }
+
+            else {
+
+                alert(
+                    "The order couldn't be deleted. ♡"
+                );
+
+            }
+
+
+            return;
+
+        }
+
+
+        /*
+        IMPORTANT:
+        If RLS silently prevents the delete,
+        Supabase can return an empty array.
+
+        Therefore we ONLY remove the card
+        when an actual row came back.
+        */
+
+        if (
+            !Array.isArray(
+                deletedRows
+            ) ||
+            deletedRows.length === 0
+        ) {
+
+
+            console.error(
+                "NO ROW WAS DELETED:",
+                deletedRows
             );
 
 
             alert(
-                "The order couldn't be deleted. ♡"
+                "The order was not deleted from the database. ♡"
             );
 
 
@@ -1620,10 +1795,21 @@ async function deleteOrder(
         }
 
 
+        /*
+        THE DATABASE DELETE SUCCEEDED.
+        NOW remove the card from the page.
+        */
+
         card.remove();
 
 
         updateOrderCount();
+
+
+        console.log(
+            "Order deleted successfully:",
+            orderId
+        );
 
 
     }
@@ -1766,4 +1952,3 @@ document.addEventListener(
 </body>
 
 </html>
-
